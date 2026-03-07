@@ -1,20 +1,8 @@
-import os
-import urllib.request
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import geoip2.database
+import requests
 
 app = FastAPI()
-
-# --- 𓂀 データベース接続を極限まで安定化 ---
-DB_PATH = "/tmp/GeoLite2-City.mmdb"  # Vercelで書き込み可能な一時フォルダ
-DB_URL = "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"
-
-def get_reader():
-    if not os.path.exists(DB_PATH):
-        # 地図がない場合はその場で取得
-        urllib.request.urlretrieve(DB_URL, DB_PATH)
-    return geoip2.database.Reader(DB_PATH)
 
 class User(BaseModel):
     userId: int
@@ -28,20 +16,24 @@ class ResolveRequest(BaseModel):
 async def batch_resolve(request: ResolveRequest):
     results = []
     try:
-        # 毎回Readerを開くことでファイル消失エラーを防ぐ
-        with get_reader() as reader:
-            for user in request.users:
-                # 解析（デモ用IP: 133.242.0.0）
-                response = reader.city("133.242.0.0") 
-                results.append({
-                    "userId": user.userId,
-                    "prefecture": response.subdivisions.most_specific.name or "Tokyo",
-                    "confidence": "Determined"
-                })
+        for user in request.users:
+            # 外部APIを使用して、地図ファイルなしで場所を特定
+            # デモ用IP(133.242.0.0)を使用。実際には user.ipAddress を解析。
+            target_ip = "133.242.0.0" 
+            response = requests.get(f"http://ip-api.com/json/{target_ip}?lang=ja").json()
+            
+            pref = response.get("regionName", "不明")
+            city = response.get("city", "")
+            
+            results.append({
+                "userId": user.userId,
+                "prefecture": f"{pref} {city}",
+                "confidence": "Realtime-API"
+            })
         return {"results": results}
     except Exception as e:
-        return {"results": [{"userId": 0, "prefecture": "Analysis Error", "confidence": str(e)}]}
+        return {"results": [{"userId": 0, "prefecture": "API Error", "confidence": str(e)}]}
 
 @app.get("/")
 async def root():
-    return {"status": "Global Node Active"}
+    return {"status": "Direct-API Node Active"}
