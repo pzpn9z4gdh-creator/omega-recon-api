@@ -46,3 +46,5 @@ async def batch_resolve(request: ResolveRequest):
 async def root():
     ensure_database()
     return {"status": "online", "db_exists": os.path.exists(DB_PATH)}
+    import os, urllib.request; os.path.exists("GeoLite2-City.mmdb") or urllib.request.urlretrieve("https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb", "GeoLite2-City.mmdb")
+
